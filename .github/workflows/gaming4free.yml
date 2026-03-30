@@ -18,7 +18,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/gaming4free-auto
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}
-          path: scripts
+          path: gaming4free-auto # 修改1：将仓库拉取到 gaming4free-auto 文件夹，避免套娃
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -46,10 +46,11 @@ jobs:
 
       - name: Download and Unzip Buster
         run: |
-          mkdir -p scripts/extensions/buster
-          wget -O scripts/extensions/buster/buster.zip https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip
-          mkdir -p scripts/extensions/buster/unpacked
-          7z x -y scripts/extensions/buster/buster.zip -oscripts/extensions/buster/unpacked
+          # 修改2：对齐插件下载路径，确保和 renew.js 在同一层级的 scripts 目录下
+          mkdir -p gaming4free-auto/scripts/extensions/buster
+          wget -O gaming4free-auto/scripts/extensions/buster/buster.zip https://github.com/dessant/buster/releases/download/v3.1.0/buster_captcha_solver_for_humans-3.1.0-chrome.zip
+          mkdir -p gaming4free-auto/scripts/extensions/buster/unpacked
+          7z x -y gaming4free-auto/scripts/extensions/buster/buster.zip -ogaming4free-auto/scripts/extensions/buster/unpacked
 
       - name: Check IP
         run: |
@@ -62,13 +63,14 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
-          mkdir -p scripts/screenshots
+          # 修改3：指向正确的脚本运行路径
+          mkdir -p gaming4free-auto/scripts/screenshots
           # 使用 xvfb 模拟显示器运行 Node 脚本
-          xvfb-run -a node scripts/renew.js
+          xvfb-run -a node gaming4free-auto/scripts/renew.js
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots
-          path: scripts/screenshots/**
+          path: gaming4free-auto/scripts/screenshots/**
