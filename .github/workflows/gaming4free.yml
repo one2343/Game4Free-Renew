@@ -31,11 +31,19 @@ jobs:
           stack: dual
           mode: client
 
-      - name: Install system deps
+       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full pulseaudio alsa-utils ffmpeg scrot
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full \
+            pulseaudio alsa-utils ffmpeg
+
           pulseaudio --start --exit-idle-time=-1 || true
+
+          pactl load-module module-null-sink sink_name=virtual_speaker || true
+          pactl set-default-sink virtual_speaker || true
+
+          pactl load-module module-virtual-source source_name=virtual_mic || true
+          pactl set-default-source virtual_mic || true
 
       - name: Install playwright
         run: |
