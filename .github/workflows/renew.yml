@@ -1,0 +1,74 @@
+name: Renew
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/53 * * * *"   # 🕕 每小时运行一次
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Gaming4Free-Auto-Private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 🌐 设置 WARP 出口
+        uses: fscarmen/warp-on-actions@v1.2
+        with:
+          stack: dual
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full \
+            pulseaudio alsa-utils ffmpeg google-chrome-stable
+          pulseaudio --start --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=virtual_speaker || true
+          pactl set-default-sink virtual_speaker || true
+
+      - name: Install Python Packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install DrissionPage SpeechRecognition pydub requests xvfbwrapper
+
+      - name: Run script
+        env:
+          TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          mkdir -p scripts/screenshots
+          python scripts/renew.py
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: scripts/screenshots/**
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        if: always()
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0 
+          keep_minimum_runs: 2
