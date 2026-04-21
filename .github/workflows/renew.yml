@@ -59,7 +59,7 @@ jobs:
           mkdir -p scripts/screenshots
           # 使用原生 xvfb-run 启动，更稳定
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-            python -u scripts/renew.py
+            python -u scripts/renew1.py
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
