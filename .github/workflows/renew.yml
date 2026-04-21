@@ -1,0 +1,141 @@
+name: gaming4free renew (Python + GOST)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/53 * * * *"   # 🕕 每小时运行一次
+
+# 🌟 必须添加：赋予删除权限
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      GOST_PROXY: ${{ secrets.GOST_PROXY }}
+
+    steps:
+      # =========================
+      # 🟡 0️⃣ 当前仓库
+      # =========================
+      - uses: actions/checkout@v4
+
+      # =========================
+      # 🟡 ⭐ 私有仓库 (存放脚本)
+      # =========================
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Gaming4Free-Auto-Private
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          path: scripts
+
+      # =========================
+      # 🟡 1️⃣ Python 环境设置
+      # =========================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # =========================
+      # 🟡 2️⃣ 启动代理 (GOST) - 增强排错版
+      # =========================
+      - name: 🛡️ 启动 GOST 代理转发
+        if: ${{ env.GOST_PROXY != '' }}
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/ginuerzh/gost/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+          echo "📦 GOST 版本: $VERSION"
+          wget -q "https://github.com/ginuerzh/gost/releases/download/v${VERSION}/gost_${VERSION}_linux_amd64.tar.gz"
+          tar -xzf "gost_${VERSION}_linux_amd64.tar.gz"
+          chmod +x gost
+          
+          echo "🚀 正在使用配置的 GOST_PROXY 启动代理..."
+          # 启动代理，映射到本地 8080 端口，并把日志存下来
+          nohup ./gost -L http://:8080 -F "$GOST_PROXY" > gost.log 2>&1 &
+          sleep 4
+          
+          echo "✅ 准备测试连通性..."
+          PROXY_IP=$(curl --max-time 10 -x http://127.0.0.1:8080 https://api.ipify.org 2>/dev/null)
+          
+          if [ -z "$PROXY_IP" ]; then
+            echo "❌ 糟糕！代理连接失败或超时！"
+            echo "🔍 以下是 GOST 内部运行日志（帮你看清是账号写错了还是节点连不上）："
+            echo "----------------------------------------"
+            cat gost.log
+            echo "----------------------------------------"
+            exit 1 # 代理连不上直接熔断
+          else
+            echo "🎉 代理连接成功！"
+            # 🔐 隐私保护：只提取第一个点前面的数字，后面用星号代替
+            MASKED_IP=$(echo "$PROXY_IP" | awk -F. '{print $1".*.*.*"}')
+            echo "🌐 当前代理出口 IP: $MASKED_IP"
+          fi
+
+      # =========================
+      # 🟡 3️⃣ 系统底层依赖（虚拟音频与显示）
+      # =========================
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full \
+            pulseaudio alsa-utils ffmpeg google-chrome-stable
+
+          # 启动虚拟音频环境，防止浏览器获取音频流时挂起
+          pulseaudio --start --exit-idle-time=-1 || true
+          pactl load-module module-null-sink sink_name=virtual_speaker || true
+          pactl set-default-sink virtual_speaker || true
+          pactl load-module module-virtual-source source_name=virtual_mic || true
+          pactl set-default-source virtual_mic || true
+
+      # =========================
+      # 🟡 4️⃣ 安装 Python 核心库
+      # =========================
+      - name: Install Python Packages
+        run: |
+          python -m pip install --upgrade pip
+          # 安装 DrissionPage 及 音频识别需要的库
+          pip install DrissionPage SpeechRecognition pydub requests xvfbwrapper
+
+      # =========================
+      # 🟡 5️⃣ 运行 Python 脚本
+      # =========================
+      - name: Run script
+        env:
+          RENEW_URL: ${{ secrets.RENEW_URL }}  # 记得在 Secrets 里添加这个变量
+          MC_USERNAME: ${{ secrets.MC_USERNAME }}
+          TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          # 告诉 Python 脚本本地代理的地址
+          PROXY: ${{ env.GOST_PROXY != '' && '127.0.0.1:8080' || '' }}
+        run: |
+          mkdir -p scripts/screenshots
+          # 注意：这里调用的是 renew.py
+          python scripts/renew.py
+
+      # =========================
+      # 🟡 6️⃣ 上传截图
+      # =========================
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: scripts/screenshots/**
+          if-no-files-found: warn
+          retention-days: 1
+
+      # =========================
+      # 🌟 7️⃣ 清理旧运行记录
+      # =========================
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        if: always()
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0 
+          keep_minimum_runs: 3
