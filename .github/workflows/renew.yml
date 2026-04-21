@@ -35,9 +35,10 @@ jobs:
 
       - name: Install System Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb wget unzip curl jq p7zip-full \
-            pulseaudio alsa-utils ffmpeg google-chrome-stable
+          sudo apt-get update -q
+          # 补充字体库防止网页或截图出现方块乱码，同时保留音频环境
+          sudo apt-get install -y google-chrome-stable xvfb ffmpeg fonts-wqy-zenhei fonts-noto-cjk \
+            pulseaudio alsa-utils
           pulseaudio --start --exit-idle-time=-1 || true
           pactl load-module module-null-sink sink_name=virtual_speaker || true
           pactl set-default-sink virtual_speaker || true
@@ -45,22 +46,27 @@ jobs:
       - name: Install Python Packages
         run: |
           python -m pip install --upgrade pip
-          pip install DrissionPage SpeechRecognition pydub requests xvfbwrapper
+          # 移除 DrissionPage，引入 seleniumbase
+          pip install seleniumbase requests pydub SpeechRecognition
 
       - name: Run script
         env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: "1"
           TG_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
           mkdir -p scripts/screenshots
-          python scripts/renew1.py
+          # 使用原生 xvfb-run 启动，更稳定
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            python -u scripts/renew.py
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots
-          path: scripts/screenshots/**
+          path: scripts/screenshots/*.png
           if-no-files-found: warn
           retention-days: 1
 
