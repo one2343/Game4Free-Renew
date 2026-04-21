@@ -15,8 +15,6 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: 📥 下载私库脚本
         uses: actions/checkout@v4
         with:
